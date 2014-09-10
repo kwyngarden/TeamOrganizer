@@ -193,6 +193,10 @@ Player7\n'
             return Math.floor(Math.random() * (max - min + 1) + min);
         }
 
+        function deep_copy(o) {
+            return JSON.parse(JSON.stringify(o));
+        }
+
         function add_group(rank_to_players, group_lines, group_number) {
             if (group_lines.length == 0) {
                 return;
@@ -266,13 +270,59 @@ Player7\n'
             return players_list;
         }
 
-        function get_leftovers(players_list, num_leftovers) {
+        function log_list_names(some_list) {
+            for (var i = 0; i < some_list.length; i++) {
+               console.log(some_list[i]['name']);
+            }
+        }
+
+        function get_leftovers_pool(players_list, num_groups, bias_low, bias_high) {
+            var leftovers_pool = [];
+
+            var num_times_to_put_in_pool = function(group_num) {
+                if (bias_low) {
+                    return group_num + 1;
+                } else if (bias_high) {
+                    return num_groups - group_num;
+                }
+                return 1;
+            }
+
+            for (var i = 0; i < players_list.length; i++) {
+                var num_entries = num_times_to_put_in_pool(players_list[i]['group_num']);
+                for (var j = 0; j < num_entries; j++) {
+                    leftovers_pool.push(deep_copy(players_list[i]));
+                }
+            }
+            return leftovers_pool;
+        }
+
+        function player_index_in_list(players_list, player) {
+            for (var i = 0; i < players_list.length; i++) {
+                if (players_list[i]['name'] == player['name']) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        function get_leftovers(players_list, num_leftovers, num_groups, bias_low, bias_high) {
+            var leftovers_pool = get_leftovers_pool(players_list, num_leftovers, bias_low, bias_high);
             var leftovers = [];
+
             for (var i = 0; i < num_leftovers; i++) {
-                // TODO support lower ranks having bigger chance of being leftovers
-                var index = randomIntFromInterval(0, players_list.length - 1);
-                leftovers.push(players_list[index]);
-                players_list.remove(index);
+                var index_in_pool = 0;
+                var index_in_leftovers = 0;
+                while (index_in_leftovers != -1) {
+                    index_in_pool = randomIntFromInterval(0, leftovers_pool.length - 1);
+                    index_in_leftovers = player_index_in_list(leftovers, leftovers_pool[index_in_pool]);
+                }
+                leftovers.push(leftovers_pool[index_in_pool]);
+                leftovers_pool.remove(index_in_pool);
+            }
+
+            for (var leftover_index = 0; leftover_index < leftovers.length; leftover_index++) {
+                players_list.remove(player_index_in_list(players_list, leftovers[leftover_index]));
             }
             return leftovers;
         }
@@ -326,7 +376,8 @@ Player7\n'
             var num_teams = Math.floor(players_list.length / players_per_team);
             var num_leftovers = players_list.length % players_per_team;
 
-            var leftovers = get_leftovers(players_list, num_leftovers);
+            var leftovers = get_leftovers(players_list, num_leftovers, players_by_rank['num_groups'], bias_low, bias_high);
+
             var teams = get_teams(players_list, num_teams);
 
             var innerHTML = '<table id="teams_table" class="center"><tr>';
@@ -350,7 +401,7 @@ Player7\n'
                 for (var i = 0; i < leftovers.length; i++) {
                     innerHTML += '<li>' + leftovers[i]['name'];
                     if (display_ranks) {
-                        innerHTML += ' <span class="rank_text">(' + team[j]['rank'] + ')</span>';
+                        innerHTML += ' <span class="rank_text">(' + leftovers[i]['rank'] + ')</span>';
                     }
                     innerHTML += '</li>';
                 }
