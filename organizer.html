@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Team Organizer</title>
+    <style>
+        body {
+            font-family: 'Helvetica';
+        }
+
+        .center {
+            text-align: center;
+        }
+
+        .page_section {
+            clear: both;
+        }
+
+        #control_panel {
+            width: 250px;
+            border: 1px solid gray;
+            text-align: center;
+            display: inline-block;
+            float: left;
+            margin-bottom: 10px;
+        }
+
+        .control_panel_element {
+            margin: 8px 5px;
+        }
+
+        #players_per_team, #display_ranks_container {
+            width: 50px;
+            text-align: right;
+            float: right;
+            font-size: 14;
+        }
+
+        #players_per_team_text, #display_ranks_text {
+            display: inline-block;
+            display: table-cell;
+            vertical-align: middle;
+        }
+
+        #players_per_team_div, #display_ranks_div, #leftovers_bias_div {
+            width: 225px;
+            display: table;
+            font-size: 14px;
+        }
+
+        #leftovers_bias_container {
+            font-size: 12px;
+        }
+
+        #create_teams_button {
+            margin-bottom: 8px;
+            font-size: 16px;
+            text-align: center;
+        }
+
+        #player_names {
+            max-width: 230px;
+        }
+
+        #team_organizer_div {
+            min-width: 650px;
+        }
+
+        #results_div {
+            margin-left: 20px;
+            margin-bottom: 10px;
+            display: inline-block;
+            float: left;
+            border: 1px solid gray;
+            min-width: 600px;
+        }
+
+        #results_header {
+            margin: 5px 0px;
+        }
+
+        #message {
+            margin-top: 0px;
+            color: red;
+        }
+
+        input[type='text'] {
+            font-size: 16px;
+        }
+
+        #teams_div {
+            min-width: 600px;
+        }
+
+        .team {
+            padding: 10px;
+        }
+
+        .team h4 {
+            margin: 0px;
+        }
+
+        .team ul {
+            margin-top: 0px;
+            margin-left: 0px;
+            padding-left: 25px;
+            text-align: left;
+        }
+
+        #teams_table {
+            margin: 0 auto;
+        }
+
+        #teams_table td {
+            vertical-align: text-top;
+        }
+
+        .rank_text {
+            font-style: italic;
+            font-size: 10px;
+        }
+    </style>
+</head>
+
+<body onload='load_placeholder_text();'>
+    <div class='page_section'>
+        <h1 class='center'>Team Organizer</h1>
+    </div>
+
+    <div class='page_section'>
+        <p>Enter players in the text area below (one name per line) and select the number of players per team, then click the button.</p>
+        <p>Put a blank line between groups of players to indicate different player ranks. Sort the ranks (best group first) and the organizer will attempt to balance the teams. You can explicitly name these ranks by starting the first line of a group with #. An example is given in the player input box.</p>
+    </div>
+
+    <div id='team_organizer_div' class='page_section'>
+        <div id='control_panel'>
+            <div id='players_per_team_div' class='control_panel_element'>
+                <div id='players_per_team_text'>Players per team:</div><input type='text' id='players_per_team' value='5' />
+            </div>
+            <div id='display_ranks_div' class='control_panel_element'>
+                <div id='display_ranks_text'>Display player ranks:</div><div id='display_ranks_container'><input type='checkbox' id='display_ranks' checked /></div>
+            </div>
+            <div id='leftovers_bias_div' class='control_panel_element'>
+                <div id='leftovers_bias_text'>Leftovers are more likely to be:</div>
+                <div id='leftovers_bias_container'><input type='radio' name='leftovers_bias' id='leftovers_bias_low' value='low'>Low rank&nbsp;&nbsp;<input type='radio' name='leftovers_bias' id='leftovers_bias_high' value='high'>High rank&nbsp;&nbsp;<input type='radio' name='leftovers_bias' value='none' checked>No bias</div>
+            </div>
+            <div class='center'>
+                <button type='button' id='create_teams_button' class='control_panel_element' onclick='create_teams();'>Create Teams</button>
+            </div>
+            <textarea id='player_names' class='control_panel_element' rows="30" cols="31"></textarea>
+        </div>
+
+        <div id='results_div' class='center'>
+            <h2 id='results_header' class='center'>Teams</h2>
+            <p id='message' class='center'>Use the control panel on the left to generate teams.</p>
+            <div id='teams_div'></div>
+        </div>
+    </div>
+
+    <script>
+        function load_placeholder_text() {
+            document.getElementById('player_names').placeholder = '\
+# Expert\n\
+Player1\n\
+Player2\n\
+\n\
+# Experienced\n\
+Player3\n\
+Player4\n\
+\n\
+# Novice\n\
+Player5\n\
+Player6\n\
+Player7\n'
+        }
+
+        // Array Remove - By John Resig (MIT Licensed)
+        Array.prototype.remove = function(from, to) {
+          var rest = this.slice((to || from) + 1 || this.length);
+          this.length = from < 0 ? this.length + from : from;
+          return this.push.apply(this, rest);
+        };
+
+        // Array Shuffle
+        //+ Jonas Raoni Soares Silva
+        //@ http://jsfromhell.com/array/shuffle [v1.0]
+        function shuffle(o){ //v1.0
+            for(var j, x, i = o.length; i; j = Math.floor(Math.random() * i), x = o[--i], o[i] = o[j], o[j] = x);
+            return o;
+        };
+
+        function randomIntFromInterval(min, max) {
+            return Math.floor(Math.random() * (max - min + 1) + min);
+        }
+
+        function add_group(rank_to_players, group_lines, group_number) {
+            if (group_lines.length == 0) {
+                return;
+            }
+
+            var rank_name = '' + (group_number + 1);
+            var next_line_index = 0;
+
+            if (group_lines[0].indexOf('#') == 0) {
+                rank_name = group_lines[0].substr(1).trim();
+                next_line_index = 1;
+            }
+
+            var players = [];
+            while (next_line_index < group_lines.length) {
+                var player_name = group_lines[next_line_index].trim();
+                if (player_name.length > 0) {
+                    players.push(player_name);
+                }
+                next_line_index += 1;
+            }
+            players = shuffle(players);
+
+            if (players.length > 0) {
+                rank_to_players['groups'][group_number] = {
+                    'players': players,
+                    'name': rank_name
+                };
+                return true;
+            }
+            return false;
+        }
+
+        function get_players_by_rank(players_text) {
+            var players_text_lines = players_text.trim().replace(/\n+/, '\n').split('\n');
+            players_text_lines.push('');
+            var rank_to_players = {'groups': []};
+            var group_number = 0;
+            var num_players = 0;
+
+            while (players_text_lines.length > 0) {
+                var next_group_index = players_text_lines.indexOf('') + 1;
+                var added_group = false;
+
+                if (next_group_index <= players_text_lines.length) {
+                    added_group = add_group(rank_to_players, players_text_lines.slice(0, next_group_index - 1), group_number);
+                }
+
+                players_text_lines = players_text_lines.slice(next_group_index);
+                if (added_group) {
+                    group_number += 1;
+                }
+            }
+
+            rank_to_players['num_groups'] = group_number;
+            return rank_to_players;
+        }
+
+        function get_players_list(players_by_rank) {
+            var players_list = [];
+            for (var i = 0; i < players_by_rank['num_groups']; i++) {
+                var group = players_by_rank['groups'][i];
+                for (var j = 0; j < group['players'].length; j++) {
+                    players_list.push({
+                        'name': group['players'][j],
+                        'group_num': i,
+                        'rank': group['name']
+                    });
+                }
+            }
+            return players_list;
+        }
+
+        function get_leftovers(players_list, num_leftovers) {
+            var leftovers = [];
+            for (var i = 0; i < num_leftovers; i++) {
+                // TODO support lower ranks having bigger chance of being leftovers
+                var index = randomIntFromInterval(0, players_list.length - 1);
+                leftovers.push(players_list[index]);
+                players_list.remove(index);
+            }
+            return leftovers;
+        }
+
+        function get_teams(players_list, num_teams) {
+            var teams = [];
+            for (var i = 0; i < num_teams; i++) {
+                teams[i] = [];
+            }
+
+            var team_index = 0;
+            var increment = +1;
+            for (var player_index = 0; player_index < players_list.length; player_index++) {
+                teams[team_index].push(players_list[player_index]);
+
+                team_index += increment;
+                if (team_index < 0) {
+                    team_index = 0;
+                    increment = +1;
+                } else if (team_index >= num_teams) {
+                    team_index = num_teams - 1;
+                    increment = -1;
+                }
+            }
+
+            return teams;
+        }
+
+        function create_teams() {
+            var display_ranks = document.getElementById('display_ranks').checked;
+            var bias_low = document.getElementById('leftovers_bias_low').checked;
+            var bias_high = document.getElementById('leftovers_bias_high').checked;
+
+            var players_text = document.getElementById('player_names').value;
+            var players_by_rank = get_players_by_rank(players_text);
+
+            var players_per_team = parseInt(document.getElementById('players_per_team').value);
+            if (!players_per_team) {
+                document.getElementById('message').innerHTML = "Couldn't parse the number of players per team. Please enter a number.";
+                document.getElementById('teams_div').innerHTML = '';
+                return;
+            }
+
+            var players_list = get_players_list(players_by_rank);
+            if (players_list.length == 0) {
+                document.getElementById('message').innerHTML = "Didn't find any player names. Please enter at least one player to create teams.";
+                document.getElementById('teams_div').innerHTML = '';
+                return;
+            }
+
+            var num_teams = Math.floor(players_list.length / players_per_team);
+            var num_leftovers = players_list.length % players_per_team;
+
+            var leftovers = get_leftovers(players_list, num_leftovers);
+            var teams = get_teams(players_list, num_teams);
+
+            var innerHTML = '<table id="teams_table" class="center"><tr>';
+            for (var i = 0; i < teams.length; i++) {
+                innerHTML += '<td><div class="team"><h4>Team ' + (i + 1) + '</h4><ul>';
+                var team = teams[i];
+                for (var j = 0; j < team.length; j++) {
+                    innerHTML += '<li>' + team[j]['name'];
+                    if (display_ranks) {
+                        innerHTML += ' <span class="rank_text">(' + team[j]['rank'] + ')</span>';
+                    }
+                    innerHTML += '</li>';
+                }
+                innerHTML += '</ul></div></td>';
+                if (i > 0 && ((i + 1) % 3) == 0) {
+                    innerHTML += '</tr><tr>';
+                }
+            }
+            if (leftovers.length > 0) {
+                innerHTML += '<td><div class="team"><h4>Leftovers</h4><ul>';
+                for (var i = 0; i < leftovers.length; i++) {
+                    innerHTML += '<li>' + leftovers[i]['name'];
+                    if (display_ranks) {
+                        innerHTML += ' <span class="rank_text">(' + team[j]['rank'] + ')</span>';
+                    }
+                    innerHTML += '</li>';
+                }
+                innerHTML += '</ul></div></td>';
+            }
+            innerHTML += '</tr></table>';
+
+            document.getElementById('message').innerHTML = 'Created teams.';
+            document.getElementById('teams_div').innerHTML = innerHTML;
+            force_redraw(document.getElementById('results_div'));
+        }
+
+        function force_redraw(element) {
+            // Force the element to redraw itself, for example to get rid of
+            // the old border of an expanded div.
+            var disp = element.style.display;
+            element.style.display = 'none';
+            var trick = element.offsetHeight;
+            element.style.display = disp;
+        };
+    </script>
+</body>
+</html>
