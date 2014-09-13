@@ -307,7 +307,8 @@ Player7\n'
         }
 
         function get_leftovers(players_list, num_leftovers, num_groups, bias_low, bias_high) {
-            var leftovers_pool = get_leftovers_pool(players_list, num_leftovers, bias_low, bias_high);
+            var leftovers_pool = get_leftovers_pool(players_list, num_groups, bias_low, bias_high);
+
             var leftovers = [];
 
             for (var i = 0; i < num_leftovers; i++) {
